@@ -46,8 +46,8 @@ def get_gemini_response(context_text, file_obj, job_description):
 # -------------------------
 # Streamlit UI
 # -------------------------
-st.set_page_config(page_title="ATS Resume Expert")
-st.header("ATS Tracking System")
+st.set_page_config(page_title="AI Resume Keyword Matcher")
+st.header("AI Resume Keyword Matcher")
 
 input_text = st.text_area("Job Description:", key="input")
 uploaded_file = st.file_uploader("Upload your resume (PDF)...", type=["pdf"])
