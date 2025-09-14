@@ -1,89 +1,91 @@
 from dotenv import load_dotenv
-
 load_dotenv()
-import base64
-import streamlit as st
+
 import os
-import io
-from PIL import Image 
-import pdf2image
+import streamlit as st
+import tempfile
 import google.generativeai as genai
 
+# -------------------------
+# Gemini setup
+# -------------------------
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+MODEL_ID = "gemini-1.5-flash"   # or "gemini-1.5-pro"
+model = genai.GenerativeModel(MODEL_ID)
 
-def get_gemini_response(input,pdf_cotent,prompt):
-    model=genai.GenerativeModel('gemini-pro-vision')
-    response=model.generate_content([input,pdf_content[0],prompt])
-    return response.text
-
-def input_pdf_setup(uploaded_file):
-    if uploaded_file is not None:
-        ## Convert the PDF to image
-        images=pdf2image.convert_from_bytes(uploaded_file.read())
-
-        first_page=images[0]
-
-        # Convert to bytes
-        img_byte_arr = io.BytesIO()
-        first_page.save(img_byte_arr, format='JPEG')
-        img_byte_arr = img_byte_arr.getvalue()
-
-        pdf_parts = [
-            {
-                "mime_type": "image/jpeg",
-                "data": base64.b64encode(img_byte_arr).decode()  # encode to base64
-            }
-        ]
-        return pdf_parts
-    else:
+# -------------------------
+# Helpers
+# -------------------------
+def upload_pdf_to_gemini(uploaded_file):
+    """
+    Save the Streamlit UploadedFile to a temp file and upload it to Gemini.
+    Returns a genai File object you can pass to generate_content.
+    """
+    if uploaded_file is None:
         raise FileNotFoundError("No file uploaded")
 
-## Streamlit App
+    # Persist to a temp path so the SDK can upload by path
+    suffix = ".pdf"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(uploaded_file.getbuffer())
+        temp_path = tmp.name
 
-st.set_page_config(page_title="ATS Resume EXpert")
+    # Upload to Gemini Files API
+    file_obj = genai.upload_file(path=temp_path)
+    return file_obj
+
+def get_gemini_response(context_text, file_obj, job_description):
+    """
+    context_text: your role/prompt (HR/ATS instructions)
+    file_obj: the uploaded PDF 'File' returned by upload_file
+    job_description: string from the textarea
+    """
+    resp = model.generate_content([context_text, file_obj, job_description])
+    return resp.text
+
+# -------------------------
+# Streamlit UI
+# -------------------------
+st.set_page_config(page_title="ATS Resume Expert")
 st.header("ATS Tracking System")
-input_text=st.text_area("Job Description: ",key="input")
-uploaded_file=st.file_uploader("Upload your resume(PDF)...",type=["pdf"])
 
+input_text = st.text_area("Job Description:", key="input")
+uploaded_file = st.file_uploader("Upload your resume (PDF)...", type=["pdf"])
 
 if uploaded_file is not None:
-    st.write("PDF Uploaded Successfully")
-
+    st.success("PDF uploaded successfully.")
 
 submit1 = st.button("Tell Me About the Resume")
-
-#submit2 = st.button("How Can I Improvise my Skills")
-
 submit3 = st.button("Percentage match")
 
 input_prompt1 = """
- You are an experienced HR With Tech Experience in the field of any one job role from  Data Science, Full stack Web development, Big Data Engineering, DEVOPS, Data Analyst, computer science, software engineer,
- your task is to review the provided resume against the job description for these profiles.
-Please share your professional evaluation on whether the candidate's profile aligns with the role. 
- Highlight the strengths and weaknesses of the applicant in relation to the specified job requirements.
+You are an experienced HR professional with strong technical hiring experience
+(Data Science, Full-Stack Web Development, Big Data Engineering, DevOps, Data Analysis,
+Computer Science, Software Engineering). Review the provided resume against the job description.
+Assess alignment to the role, and clearly list strengths and weaknesses relative to the requirements.
 """
 
 input_prompt3 = """
-You are an skilled ATS (Applicant Tracking System) scanner with a deep understanding of any one of job role Data Science, Full stack Web development, Big Data Engineering, DEVOPS, Data Analyst, computer science, software engineer,and  ATS functionality, 
-your task is to evaluate the resume against the provided job description. give me the percentage of match if the resume matches
-the job description. First the output should come as percentage and then keywords missing and last final thoughts.
+You are an ATS (Applicant Tracking System) expert for roles such as
+Data Science, Full-Stack Web Development, Big Data Engineering, DevOps, Data Analysis,
+Computer Science, or Software Engineering. Evaluate the resume against the job description.
+First output an overall percentage match (0–100%). Then list missing/weak keywords.
+Finally provide concise, actionable final thoughts for improvement.
 """
 
+def run_evaluation(prompt_text):
+    if uploaded_file is None:
+        st.warning("Please upload the resume.")
+        return
+    try:
+        file_obj = upload_pdf_to_gemini(uploaded_file)
+        response_text = get_gemini_response(prompt_text, file_obj, input_text)
+        st.subheader("The Response")
+        st.write(response_text if response_text else "No content returned.")
+    except Exception as e:
+        st.error(f"Error: {e}")
+
 if submit1:
-    if uploaded_file is not None:
-        pdf_content=input_pdf_setup(uploaded_file)
-        response=get_gemini_response(input_prompt1,pdf_content,input_text)
-        st.subheader("The Repsonse is")
-        st.write(response)
-    else:
-        st.write("Please uplaod the resume")
-
+    run_evaluation(input_prompt1)
 elif submit3:
-    if uploaded_file is not None:
-        pdf_content=input_pdf_setup(uploaded_file)
-        response=get_gemini_response(input_prompt3,pdf_content,input_text)
-        st.subheader("The Repsonse is")
-        st.write(response)
-    else:
-        st.write("Please uplaod the resume")
-
+    run_evaluation(input_prompt3)
