@@ -55,7 +55,9 @@ This project uses the following Python packages:
 - `docx2txt` – to process DOCX files  
 - `PyPDF2` – to read text from PDFs  
 
+## Demo Video Link 
 
+https://youtu.be/px171PUECAU
 
 
 
