@@ -1,4 +1,7 @@
-streamlit 
-google-generativeai 
-python-dotenv 
+streamlit
+scikit-learn
 pdf2image
+docx2txt
+PyPDF2
+google-generativeai
+python-dotenv
